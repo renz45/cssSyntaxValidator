@@ -1,0 +1,107 @@
+<!DOCTYPE>
+<html>
+  <head>
+    <script src="./cssSyntaxValidator.js"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+  </head>
+  <body>
+    <style class="s1">
+      h1 {
+        color: red;
+      }
+      
+      h2 {
+        color: #123333;
+      }
+      
+      div.test, p#test {
+        margin: 0 0 0 0;
+        font-family: Arial, helvetica, "Times New Roman", sans-serif;
+      }
+    </style>
+    
+    <style class="s2">
+      .test h1 {
+        color: red;
+
+    </style>
+    
+    <style class="s3">
+      .test h1
+        color: red;
+      }
+
+      .test h2 {
+        color: blue;
+      }
+    </style>
+    
+    <style class="s4">
+      h1 {
+        color: red
+      }
+    </style>
+    
+    <style class="s5">
+      h1 {
+        color: #ffffff;
+        margin: 0 0 0 0
+        padding: 0 0 0 0;
+      }
+    </style>
+    
+    <script>
+      try {
+        cssSyntaxValidator($('.s1').text())
+        console.log("s1 passing")
+      } catch(e) {
+        console.log("s1 failing")
+        console.log(e.message);
+        console.log(e);
+        console.log(" ");
+      }
+      
+      try {
+        cssSyntaxValidator($('.s2').text())
+        console.log("s2 passing")
+      } catch(e) {
+        console.log("s2 failing")
+        console.log(e.message);
+        console.log(e);
+        console.log(" ");
+      }
+      
+      try {
+        cssSyntaxValidator($('.s3').text())
+        console.log("s3 passing")
+      } catch(e) {
+        console.log("s3 failing")
+        console.log(e.message);
+        console.log(e);
+        console.log(" ");
+      }
+      
+      try {
+        cssSyntaxValidator($('.s4').text())
+        console.log("s4 passing")
+      } catch(e) {
+        console.log("s4 failing")
+        console.log(e.message);
+        console.log(e);
+        console.log(" ");
+      }
+      
+      try {
+        cssSyntaxValidator($('.s5').text())
+        console.log("s5 passing")
+      } catch(e) {
+        console.log("s5 failing")
+        console.log(e.message);
+        console.log(e);
+        console.log(" ");
+      }
+      
+    </script>
+  
+  </body>
+</html>

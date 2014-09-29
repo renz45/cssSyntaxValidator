@@ -1,0 +1,15 @@
+{
+  "name": "css-syntax-validator",
+  "version": "0.0.1",
+  "main": "cssSyntaxValidator.js",
+  "author": "Code School - Adam Rensel",
+  "license": "MIT",
+  "description": "CSS syntax validator",
+  "repository": null,
+  "devDependencies": {
+    "chai": "^1.9.1",
+    "lodash": "^2.4.1",
+    "mocha": "^1.21.4",
+    "node-inspector": "^0.7.4"
+  }
+}
