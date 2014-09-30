@@ -1,7 +1,7 @@
 var cssSyntaxValidator = function() {
   var blockStartChar = "{",
       blockEndChar = "}",
-      declarationEndChar = ";",
+      propertyEndChar = ";",
       selectorDividerChar = ",",
       classSelectorBeginChar = ".",
       idSelectorBeginChar = "#",
@@ -47,12 +47,38 @@ var cssSyntaxValidator = function() {
         "not", "nth-child", "nth-last-child", "nth-last-of-type", "nth-of-type",
         "only-child", "only-of-type", "optional", "out-of-range", "read-only", "read-write",
         "required", "right", "root", "scope", "target", "valid", "visited"
+      ],
+      cssProperties = [
+        "background","background-attachment","backgroundAttachment","background-color",
+        "backgroundColor","background-image","backgroundImage","background-position",
+        "backgroundPosition","background-repeat","backgroundRepeat","border","border-bottom",
+        "borderBottom","border-bottom-color","borderBottomColor","border-bottom-style",
+        "borderBottomStyle","border-bottom-width","borderBottomWidth","border-color",
+        "borderColor","border-left","borderLeft","border-left-color","borderLeftColor",
+        "border-left-style","borderLeftStyle","border-left-width","borderLeftWidth",
+        "border-right","borderRight","border-right-color","borderRightColor",
+        "border-right-style","borderRightStyle","border-right-width","borderRightWidth",
+        "border-style","borderStyle","border-top","borderTop","border-top-color","borderTopColor",
+        "border-top-style","borderTopStyle","border-top-width","borderTopWidth","border-width",
+        "borderWidth","clear","clip","clip","color","cursor","display","filter","font",
+        "font-family","fontFamily","font-size","fontSize","font-variant","fontVariant",
+        "font-weight","fontWeight","height","left","letter-spacing","letterSpacing",
+        "line-height","lineHeight","list-style","listStyle","list-style-image","listStyleImage",
+        "list-style-position","listStylePosition","list-style-type","listStyleType","margin",
+        "margin-bottom","marginBottom","margin-left","marginLeft","margin-right","marginRight",
+        "margin-top","marginTop","overflow","padding","padding-bottom","paddingBottom","padding-left",
+        "paddingLeft","padding-right","paddingRight","padding-top","paddingTop","page-break-after",
+        "pageBreakAfter","page-break-before","pageBreakBefore","position","float","cssFloat",
+        "text-align","textAlign","text-decoration","textDecoration","text-decoration",
+        "textDecorationBlink","textDecorationLineThrough","textDecorationNone","textDecorationOverline",
+        "textDecorationUnderline","text-indent","textIndent","text-transform","textTransform",
+        "top","vertical-align","verticalAlign","visibility","width","z-index","zIndex"
       ]
       
   
   var parserFunc, previousParserFunc, currentComment, currentSelector, selectorLine, cssData,
-      inLineComment, inBlockComment, inComment, lines, currentLine, currentDeclaration,
-      currentDeclarationValue, declarationFound, declarationLine, newDeclaration;
+      inLineComment, inBlockComment, inComment, lines, currentLine, currentProperty,
+      currentPropertyValue, propertyFound, propertyLine, newProperty, inProperty;
 
   var stripWhiteSpaceFromSelectors = function(selectors) {
     var newSelectors = [];
@@ -70,13 +96,20 @@ var cssSyntaxValidator = function() {
   }
 
   var syntaxObject = function(lIndex, cIndex) {
-    var selector = stripWhiteSpaceFromSelectors(currentSelector).join("\n") || currentStyleBlock().selector
+    var selector = stripWhiteSpaceFromSelectors(currentSelector).join("\n") || currentStyleBlock().selector;
   	return {selector: selector, line: lIndex || lineIndex + 1, char: cIndex|| characterIndex};
   }
   
   var throwStartBlockTagMissingError = function(lIndex, cIndex) {
     var syntaxObj = syntaxObject(lIndex, cIndex);
-    var newError = new Error("Starting bracket expected for: '" + syntaxObj.selector + "' at line: " + syntaxObj.line + " char: " + syntaxObj.char);
+    var newError = new Error("Starting bracket expected for selector: '" + syntaxObj.selector + "' at line: " + syntaxObj.line + " char: " + syntaxObj.char);
+    newError.lineData = syntaxObj;
+    throw newError;
+  }
+  
+  var throwEndBlockTagMissingError = function(lIndex, cIndex) {
+    var syntaxObj = syntaxObject(lIndex, cIndex);
+    var newError = new Error("End bracket expected for selector: '" + syntaxObj.selector + "' at line: " + syntaxObj.line + " char: " + syntaxObj.char);
     newError.lineData = syntaxObj;
     throw newError;
   }
@@ -121,10 +154,6 @@ var cssSyntaxValidator = function() {
     return val;
   }
   
-  var startingBracketFinder = function(character) {
-    
-  }
-  
   var findSelector = function(character) {
     currentSelector = [];
     setParserFunc(selectorFinder);
@@ -155,49 +184,64 @@ var cssSyntaxValidator = function() {
     return !inBlockComment && !inLineComment
   }
 
-  var declarationFinder = function(character) {
+  var propertyFinder = function(character) {
     if(character === ":") {
-      declarationFound = true;
+      propertyFound = true;
     } else if(character === blockEndChar) {
       setParserFunc(selectorFinder);
+      // reset the other variables used in the declaration finder
+      currentPropertyValue = "";
+      currentProperty = "";
+      propertyFound = false;
+      inProperty = false;
     }else {
-      if(character === declarationEndChar) {
-        newDeclaration = {};
-        // .replace(/^\s*|\s*$/g, '')
-        newDeclaration[currentDeclaration] = currentDeclarationValue;
-        currentStyleBlock().declarations.push(newDeclaration);
-        currentDeclarationValue = "";
-        currentDeclaration = "";
-        declarationFound = false
+      // If the character is a propertyEndChar (usually `;`)
+      // the save the declaration.
+      if(character === propertyEndChar) {
+        addPropertyToCurrent()
+      } else if(character === blockStartChar) {
+        throwEndBlockTagMissingError(lineIndex - 2, 1);
       // new line was found before an end of declaration character
-      } else if(declarationLine < lineIndex && currentDeclaration.length > 0) {
+      } else if(propertyLine < lineIndex && currentProperty.length > 0) {
+        // If the declaration is blank or the declaration value is a pseudo selector
+        // Assume the end block is missing.
+        if(currentPropertyValue.length === 0 || pseudoSelectors.indexOf(currentPropertyValue) > -1) {
+          throwEndBlockTagMissingError(lineIndex - 2, 1);
+        }
+
         throwSemicolonMissingError(lineIndex - 1, lines[lineIndex - 1].length);
       } else {
-        if(declarationFound) {
-          if(currentDeclarationValue.length < 1 && /\s/.test(character)) {return;}
-          currentDeclarationValue += character;
+        if(propertyFound) {
+          // return early if the declaration value is empty and the current character is whitespace
+          if(currentPropertyValue.length < 1 && /\s/.test(character)) {return;}
+          currentPropertyValue += character;
         } else {
-          if(currentDeclaration.length < 1 && /\s/.test(character)) {return;}
-          currentDeclaration += character;
+          // return early if the declaration name is empty and the current character is whitespace
+          if(currentProperty.length < 1 && /\s/.test(character)) {return;}
+          currentProperty += character;
         }
       }
     }
-    declarationLine = lineIndex;
+    propertyLine = lineIndex;
   }
   
   var currentStyleBlock = function() {
     return cssData[cssData.length - 1];
   }
   
-  var addDeclarationToCurrent = function(name, value) {
-    currentDeclaration = "";
-    currentDeclarationValue = "";
-    declarationFound = false;
-    currentStyleBlock().declarations.push({name: name, value: value});
+  var addPropertyToCurrent = function() {
+    newProperty = {};
+    newProperty[currentProperty] = {value: currentPropertyValue, line: lineIndex + 1, char: characterIndex + 1};
+    currentStyleBlock().properties.push(newProperty);
+    
+    // reset the other variables used in the declaration finder
+    currentPropertyValue = "";
+    currentProperty = "";
+    propertyFound = false;
   }
   
   var newStyleBlock = function() {
-    cssData.push({selector: stripWhiteSpaceFromSelectors(currentSelector).join(" "), declarations: []});
+    cssData.push({selector: stripWhiteSpaceFromSelectors(currentSelector).join(" "), properties: [], line: lineIndex + 1, char: characterIndex + 1});
     currentSelector = [];
   }
    
@@ -207,18 +251,25 @@ var cssSyntaxValidator = function() {
 
     switch(character){
       case blockStartChar:
-        console.log("TODO: Validate selector here")
-        newStyleBlock()
-        setParserFunc(declarationFinder)
+        console.log("TODO: Validate selector here");
+        newStyleBlock();
+        setParserFunc(propertyFinder);
+        inProperty = true;
         break;
       case blockEndChar:
         throwStartBlockTagMissingError(lineIndex - 1, currentSelector[currentSelector.length - 1].length);
         break;
       default:
+        // Throw an error if a new line is detected and the previous line doesn't have a `,`
+        // Can you do leading commas in css? TODO Handle leading commas if that's a thing
         if(currentSelector[currentSelector.length - 1] && selectorLine < lineIndex && !(/,\s*$/.test(currentSelector[currentSelector.length - 1]))) {
           throwStartBlockTagMissingError(lineIndex - 1, currentSelector[currentSelector.length - 1].length);
         } else {
+          // if there is a new line or the array is empty, populate it with an empty string
           if(selectorLine < lineIndex || currentSelector[currentSelector.length - 1] === undefined) { currentSelector.push(""); }
+          
+          // if the character is just white space and the current selector is blank, don't append the chracter
+          // If the current selector is not blank, append the character regardless of what it is
           if(!currentSelector[currentSelector.length - 1] && !/\s/.test(character) || currentSelector[currentSelector.length - 1]) {
             currentSelector[currentSelector.length - 1] += character;
           }
@@ -232,23 +283,23 @@ var cssSyntaxValidator = function() {
     cssData = [];
     currentComment = "";
     findSelector();
-    currentDeclarationValue = ""
-    currentDeclaration = ""
+    currentPropertyValue = ""
+    currentProperty = ""
   	
   	for(lineIndex=0, l = lines.length; lineIndex < l; lineIndex++) {
-      currentLine = lines[lineIndex]
+      currentLine = lines[lineIndex];
   		for(characterIndex=0, ll=lines[lineIndex].length; characterIndex < ll; characterIndex++) {
   			if(!parserFunc) {break;}
-  			parserFunc(currentLine[characterIndex], lineIndex, characterIndex)
+  			parserFunc(currentLine[characterIndex], lineIndex, characterIndex);
   		}
   	}
-  	console.log(currentStyleBlock())
-    // if(currentComment) {
-    //   // throwEndingCommentError(currentComment);
-    // } else if(startingTags.length > 0) { 
-  	// 	var lastStartTag = startingTags[startingTags.length - 1];
-  	// 	// throwEndingTagError(lastStartTag);
-  	// }
+    
+    // If we're still inside the declaration, assume no ending tag was found
+    if(inProperty) {
+      throwEndBlockTagMissingError()
+    }
+    
+    return cssData;
   }
 
   return checkSyntax;
@@ -261,7 +312,7 @@ try {
 } catch(e){}
 
 if(moduleExists) {
-  module.exports = cssSyntaxValidator()
+  module.exports = cssSyntaxValidator();
 } else {
   window.cssSyntaxValidator = cssSyntaxValidator();
 }

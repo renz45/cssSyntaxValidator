@@ -1,14 +1,15 @@
-// Goal: Write a function that will reverse an array.
-// Requirements: Make all of these tests pass without using the JavaScript reverse method.
 // To run: mocha -w closingTagSpec.js
+// TODO handle leading commas in css selectors
+
 
 var expect = require('chai').expect,
     validate = require('./cssSyntaxValidator.js'),
     fs = require('fs');
     
 var validateCSS = function(path) {
-  var html = fs.readFileSync(__dirname + path, 'utf8');
-  return validate(html);
+  var css = fs.readFileSync(__dirname + path, 'utf8');
+  debugger
+  return validate(css);
 }
 
 var validateCSSReturnData = function(path) {
@@ -22,7 +23,7 @@ var validateCSSReturnData = function(path) {
 describe('cssSyntaxValidator', function() {  
   describe('missing block bracket', function(){
     it('raises an error', function() {
-      expect(function(){ validateCSS('/testCss/missingBlockBracket1.css')}).to.throw(Error)
+      expect(function(){ validateCSS('/testCss/missingBlockBracket1.css')}).to.throw(Error);
       expect(function(){ validateCSS('/testCss/missingBlockBracket2.css')}).to.throw(Error)
       expect(function(){ validateCSS('/testCss/missingBlockBracket3.css')}).to.throw(Error)
     });
