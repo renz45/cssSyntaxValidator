@@ -187,21 +187,11 @@ var cssSyntaxValidator = function() {
   var propertyFinder = function(character) {
     if(character === ":") {
       propertyFound = true;
-    } else if(character === blockEndChar) {
-      setParserFunc(selectorFinder);
-      // reset the other variables used in the declaration finder
-      currentPropertyValue = "";
-      currentProperty = "";
-      propertyFound = false;
-      inProperty = false;
-    }else {
+    } else {
       // If the character is a propertyEndChar (usually `;`)
       // the save the declaration.
       if(character === propertyEndChar) {
         addPropertyToCurrent()
-      } else if(character === blockStartChar) {
-        throwEndBlockTagMissingError(lineIndex - 2, 1);
-      // new line was found before an end of declaration character
       } else if(propertyLine < lineIndex && currentProperty.length > 0) {
         // If the declaration is blank or the declaration value is a pseudo selector
         // Assume the end block is missing.
@@ -210,6 +200,16 @@ var cssSyntaxValidator = function() {
         }
 
         throwSemicolonMissingError(lineIndex - 1, lines[lineIndex - 1].length);
+      } else if(character === blockStartChar) {
+        throwEndBlockTagMissingError(lineIndex - 2, 1);
+      // new line was found before an end of declaration character
+      } else if(character === blockEndChar) {
+        setParserFunc(selectorFinder);
+        // reset the other variables used in the declaration finder
+        currentPropertyValue = "";
+        currentProperty = "";
+        propertyFound = false;
+        inProperty = false;
       } else {
         if(propertyFound) {
           // return early if the declaration value is empty and the current character is whitespace

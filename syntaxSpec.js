@@ -8,7 +8,6 @@ var expect = require('chai').expect,
     
 var validateCSS = function(path) {
   var css = fs.readFileSync(__dirname + path, 'utf8');
-  debugger
   return validate(css);
 }
 
@@ -43,11 +42,11 @@ describe('cssSyntaxValidator', function() {
   });
   
   describe('missing semicolons', function(){
-    // it('raises an error', function() {
-    //   expect(function(){ validateCSS('/testCss/missingSemicolons1.css')}).to.throw(Error)
-    //   expect(function(){ validateCSS('/testCss/missingSemicolons2.css')}).to.throw(Error)
-    //   expect(function(){ validateCSS('/testCss/missingSemicolons3.css')}).to.throw(Error)
-    // }); 
+    it('raises an error', function() {
+      expect(function(){ validateCSS('/testCss/missingSemicolons1.css')}).to.throw(Error)
+      expect(function(){ validateCSS('/testCss/missingSemicolons2.css')}).to.throw(Error)
+      expect(function(){ validateCSS('/testCss/missingSemicolons3.css')}).to.throw(Error)
+    }); 
   
     // describe("error data", function() {
     //   xit("contains line data", function() {
@@ -61,12 +60,12 @@ describe('cssSyntaxValidator', function() {
   });
   // 
   // describe('missing block bracket', function(){
-  //   it('raises an error', function() {
-  //     expect(function(){ validateCSS('/testCss/missingBlockBracket1.css')}).to.throw(Error)
-  //     expect(function(){ validateCSS('/testCss/missingBlockBracket2.css')}).to.throw(Error)
-  //     expect(function(){ validateCSS('/testCss/missingBlockBracket3.css')}).to.throw(Error)
-  //   });
-  // 
+    // it('raises an error', function() {
+    //   expect(function(){ validateCSS('/testCss/missingBlockBracket1.css')}).to.throw(Error)
+    //   expect(function(){ validateCSS('/testCss/missingBlockBracket2.css')}).to.throw(Error)
+    //   expect(function(){ validateCSS('/testCss/missingBlockBracket3.css')}).to.throw(Error)
+    // });
+  
   //   describe("error data", function() {
   //     xit("contains line data", function() {
   //       //  var errorData = validateCSSReturnData('/testHtml/mismatchedTags.html');
