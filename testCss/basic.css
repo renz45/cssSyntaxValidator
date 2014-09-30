@@ -1,3 +1,13 @@
 h1 {
   color: red;
 }
+
+h2 {
+  margin: 0 auto;
+  width: 5px;
+}
+
+div#wrapper {
+  width: 800px;
+  margin: 0 auto;
+}

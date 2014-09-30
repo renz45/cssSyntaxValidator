@@ -9,8 +9,6 @@ var cssSyntaxValidator = function() {
       blockCommentBeginPattern = /\/\*/,
       blockCommentEndChar = "*",
       blockCommentEndPattern = /\*\//,
-      lineCommentBeginChar = "/",
-      lineCommentPattern = /\/\//,
       pseudoSelectorStartChar = ":",
       classSelectorPattern = /\.[a-zA-Z0-9_-]/,
       idSelectorPattern = /#[a-zA-Z0-9_-]/,
@@ -77,8 +75,8 @@ var cssSyntaxValidator = function() {
       
   
   var parserFunc, previousParserFunc, currentComment, currentSelector, selectorLine, cssData,
-      inLineComment, inBlockComment, inComment, lines, currentLine, currentProperty,
-      currentPropertyValue, propertyFound, propertyLine, newProperty, inProperty;
+      inBlockComment, commentStartLine, commentStartCharacter, lines, currentLine, currentProperty,currentPropertyValue,
+      propertyFound, propertyLine, newProperty, inProperty, lineIndex, characterIndex;
 
   var stripWhiteSpaceFromSelectors = function(selectors) {
     var newSelectors = [];
@@ -97,7 +95,7 @@ var cssSyntaxValidator = function() {
 
   var syntaxObject = function(lIndex, cIndex) {
     var selector = stripWhiteSpaceFromSelectors(currentSelector).join("\n") || currentStyleBlock().selector;
-  	return {selector: selector, line: lIndex || lineIndex + 1, char: cIndex|| characterIndex};
+  	return {selector: selector, line: lIndex || lineIndex + 1, char: cIndex || characterIndex + 1};
   }
   
   var throwStartBlockTagMissingError = function(lIndex, cIndex) {
@@ -121,9 +119,10 @@ var cssSyntaxValidator = function() {
     throw newError;
   }
   
-  var throwEndingCommentError = function(commentObj) {
-    var newError = new Error("Comment ending not found for: `comment` at line: " + commentObj.line + " char: " + commentObj.char);
-    newError.lineData = commentObj;
+  var throwEndingCommentError = function(lIndex, cIndex) {
+    var syntaxObj = syntaxObject(lIndex, cIndex);
+    var newError = new Error("Comment ending not found for: `comment` at line: " + syntaxObj.line + " char: " + syntaxObj.char);
+    newError.lineData = syntaxObj;
     throw newError;
   }
   
@@ -160,28 +159,28 @@ var cssSyntaxValidator = function() {
   }
   
   var commentResolved = function(character) {
-    if(character === lineCommentBeginChar || character === blockCommentBeginChar){
+    if(character === blockCommentBeginChar){
       var nextTwoChars = lookAheadNumChars(1);
+
       if(blockCommentBeginPattern.test(nextTwoChars)) {
         inBlockComment = true;
-      } else if(lineCommentPattern.test(nextTwoChars)){
-        inLineComment = true;
+        goForwardNumChars(1);
+        commentStartLine = lineIndex + 1;
+        commentStartCharacter = characterIndex - 1;
+        return false;
       }
     }
     
     if(inBlockComment) {
       if(character === blockCommentEndChar && blockCommentEndPattern.test(lookAheadNumChars(1))) {
         inBlockComment = false;
+        commentStartLine = null;
+        commentStartCharacter = null
         goForwardNumChars(1); // Skips over the last comment character
-      }
-    } else if(inLineComment) {
-      // end the line comment when no other characters are found
-      if(lookAheadNumChars(1) === character) {
-        inLineComment = false;
+        return false;
       }
     }
-    
-    return !inBlockComment && !inLineComment
+    return !inBlockComment
   }
 
   var propertyFinder = function(character) {
@@ -199,12 +198,13 @@ var cssSyntaxValidator = function() {
           throwEndBlockTagMissingError(lineIndex - 2, 1);
         }
 
-        throwSemicolonMissingError(lineIndex - 1, lines[lineIndex - 1].length);
+        throwSemicolonMissingError(lineIndex, lines[lineIndex - 1].length);
       } else if(character === blockStartChar) {
         throwEndBlockTagMissingError(lineIndex - 2, 1);
       // new line was found before an end of declaration character
       } else if(character === blockEndChar) {
-        setParserFunc(selectorFinder);
+        // setParserFunc(selectorFinder);
+        findSelector();
         // reset the other variables used in the declaration finder
         currentPropertyValue = "";
         currentProperty = "";
@@ -230,9 +230,11 @@ var cssSyntaxValidator = function() {
   }
   
   var addPropertyToCurrent = function() {
-    newProperty = {};
-    newProperty[currentProperty] = {value: currentPropertyValue, line: lineIndex + 1, char: characterIndex + 1};
-    currentStyleBlock().properties.push(newProperty);
+    currentStyleBlock().properties.push({name: currentProperty, 
+                                         value: currentPropertyValue,
+                                         line: lineIndex + 1, 
+                                         // beginning of the property definition
+                                         char: characterIndex - currentPropertyValue.length - currentProperty.length - 1});
     
     // reset the other variables used in the declaration finder
     currentPropertyValue = "";
@@ -241,13 +243,12 @@ var cssSyntaxValidator = function() {
   }
   
   var newStyleBlock = function() {
-    cssData.push({selector: stripWhiteSpaceFromSelectors(currentSelector).join(" "), properties: [], line: lineIndex + 1, char: characterIndex + 1});
+    cssData.push({selector: stripWhiteSpaceFromSelectors(currentSelector).join(" "), properties: [], line: lineIndex + 1, char: characterIndex - currentSelector[0].length + 1});
     currentSelector = [];
   }
    
   var selectorFinder = function(character) {
-    // return early if we're in the middle of a comment
-    if(!commentResolved(character)) { return; }
+    var lastSelector = currentSelector[currentSelector.length - 1];
 
     switch(character){
       case blockStartChar:
@@ -257,46 +258,64 @@ var cssSyntaxValidator = function() {
         inProperty = true;
         break;
       case blockEndChar:
-        throwStartBlockTagMissingError(lineIndex - 1, currentSelector[currentSelector.length - 1].length);
+        throwStartBlockTagMissingError(lineIndex, characterIndex);
         break;
       default:
         // Throw an error if a new line is detected and the previous line doesn't have a `,`
-        // Can you do leading commas in css? TODO Handle leading commas if that's a thing
-        if(currentSelector[currentSelector.length - 1] && selectorLine < lineIndex && !(/,\s*$/.test(currentSelector[currentSelector.length - 1]))) {
-          throwStartBlockTagMissingError(lineIndex - 1, currentSelector[currentSelector.length - 1].length);
+        // and if the current line isn't leading with a `,`
+        if(lastSelector && selectorLine < lineIndex && (!(/,\s*$/.test(lastSelector)) && !(/^\s*,/.test(currentLine))) ) {
+          throwStartBlockTagMissingError(lineIndex, characterIndex);
         } else {
           // if there is a new line or the array is empty, populate it with an empty string
-          if(selectorLine < lineIndex || currentSelector[currentSelector.length - 1] === undefined) { currentSelector.push(""); }
+          if(selectorLine < lineIndex || lastSelector === undefined) { currentSelector.push(""); }
           
           // if the character is just white space and the current selector is blank, don't append the chracter
           // If the current selector is not blank, append the character regardless of what it is
-          if(!currentSelector[currentSelector.length - 1] && !/\s/.test(character) || currentSelector[currentSelector.length - 1]) {
+          if(!lastSelector && !/\s/.test(character) || lastSelector) {
             currentSelector[currentSelector.length - 1] += character;
           }
         }
         selectorLine = lineIndex;
     }
   }
-
-  var checkSyntax = function(string) {
-    lines = string.split("\n");
+  
+  var reset = function() {
     cssData = [];
     currentComment = "";
+    currentPropertyValue = "";
+    currentProperty = "";
+    propertyFound = null;
+    propertyLine = null;
+    newProperty  = null;
+    inProperty = null;
+    commentStartLine = null;
+    commentStartCharacter = null;
+    
     findSelector();
-    currentPropertyValue = ""
-    currentProperty = ""
-  	
+  }
+
+  var checkSyntax = function(string) {    
+    lines = string.split("\n");
+    reset();
+  	var l, ll;
+
   	for(lineIndex=0, l = lines.length; lineIndex < l; lineIndex++) {
       currentLine = lines[lineIndex];
   		for(characterIndex=0, ll=lines[lineIndex].length; characterIndex < ll; characterIndex++) {
   			if(!parserFunc) {break;}
-  			parserFunc(currentLine[characterIndex], lineIndex, characterIndex);
+        // goto the next character if we're in the middle of a comment
+        if(!commentResolved(currentLine[characterIndex])) { continue; }
+  			parserFunc(currentLine[characterIndex]);
   		}
   	}
     
     // If we're still inside the declaration, assume no ending tag was found
     if(inProperty) {
-      throwEndBlockTagMissingError()
+      var lastStyle = cssData[cssData.length-1];
+      throwEndBlockTagMissingError(lastStyle.line, lastStyle.char);
+    // If we're still inside a comment assume no ending tag was found
+    } else if(inBlockComment) {
+      throwEndingCommentError(commentStartLine, commentStartCharacter);
     }
     
     return cssData;

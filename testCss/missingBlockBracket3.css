@@ -1,7 +1,7 @@
-.test h1
+.test h1 {
   color: red;
 }
 
-.test h2 {
+.test h2
   color: blue;
 }
