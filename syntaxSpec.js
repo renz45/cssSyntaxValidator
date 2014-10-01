@@ -1,6 +1,4 @@
 // To run: mocha -w closingTagSpec.js
-// TODO handle leading commas in css selectors
-
 
 var expect = require('chai').expect,
     validate = require('./cssSyntaxValidator.js'),

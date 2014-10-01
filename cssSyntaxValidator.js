@@ -13,14 +13,6 @@ var cssSyntaxValidator = function() {
       classSelectorPattern = /\.[a-zA-Z0-9_-]/,
       idSelectorPattern = /#[a-zA-Z0-9_-]/,
       tagSelectorPattern = /[a-zA-Z0-9_-]/,
-      hexColorPattern = /^\s*#([a-fA-F0-9]{3}|[a-fA-F0-9]{6})\s*$/, // Matches #fff and #ffffff
-      rgbColorPattern = /rgb\(\s*(([2][0-5][0-5]|[01]\d\d|\d\d?)\s*,\s*){2}([2][0-5][0-5]|[01]\d\d|\d\d?)\s*\)/,
-      rgbaColorPattern = /rgba\(\s*(([2][0-5][0-5]|[01]\d\d|\d\d?)\s*,\s*){3}[01]\.\d*\s*\)/,
-      maxRgbValue = 255,
-      maxHexValue = "ff",
-      urlPattern = /url\([^()]*\)/,
-      possibleBorderTypes = ["none","hidden","dotted","dashed","solid","double","groove","ridge","inset","outset"],
-      cssLengthUnitTypes = ["em","ex","ch","rem","vh","vw","vmin","vmax","px","mm","cm","in","pt","pc", "%"],
       possibleHtmlTags = [
         "a","abbr","acronym","address","applet","area","article","aside","audio",
         "b","base","basefont","bdi","bdo","bgsound","big","blink","blockquote",
@@ -77,7 +69,45 @@ var cssSyntaxValidator = function() {
   var parserFunc, previousParserFunc, currentComment, currentSelector, selectorLine, cssData,
       inBlockComment, commentStartLine, commentStartCharacter, lines, currentLine, currentProperty,currentPropertyValue,
       propertyFound, propertyLine, newProperty, inProperty, lineIndex, characterIndex;
+  
+  // ************** Error message handling ************** //
 
+  // I want to eventually make these configurable //
+  var throwStartBlockMissingError = function(lIndex, cIndex) {
+    console.log(1)
+    var syntaxObj = syntaxObject(lIndex, cIndex);
+    var newError = new Error("Starting bracket expected for selector: '" + syntaxObj.selector + "' at line: " + syntaxObj.line + " char: " + syntaxObj.char);
+    newError.lineData = syntaxObj;
+    throw newError;
+  }
+  
+  var throwEndBlockTagMissingError = function(lIndex, cIndex) {
+    console.log(2)
+    var syntaxObj = syntaxObject(lIndex, cIndex);
+    var newError = new Error("End bracket expected for selector: '" + syntaxObj.selector + "' at line: " + syntaxObj.line + " char: " + syntaxObj.char);
+    newError.lineData = syntaxObj;
+    throw newError;
+  }
+  
+  var throwSemicolonMissingError = function(lIndex, cIndex) {
+    console.log(3)
+    var syntaxObj = syntaxObject(lIndex, cIndex);
+    var newError = new Error("Missing Semicolon for: '" + syntaxObj.selector + "' at line: " + syntaxObj.line + " char: " + syntaxObj.char);
+    newError.lineData = syntaxObj;
+    throw newError;
+  }
+  
+  var throwEndingCommentError = function(lIndex, cIndex) {
+    console.log(4)
+    var syntaxObj = syntaxObject(lIndex, cIndex);
+    var newError = new Error("Comment ending not found for: `comment` at line: " + syntaxObj.line + " char: " + syntaxObj.char);
+    newError.lineData = syntaxObj;
+    throw newError;
+  }
+  
+  // ************** General helpers ************** //
+  
+  // Strips leading and trailing whitespace from each line of a selector array
   var stripWhiteSpaceFromSelectors = function(selectors) {
     var newSelectors = [];
 
@@ -92,57 +122,31 @@ var cssSyntaxValidator = function() {
     }
     return newSelectors;
   }
-
+  
+  // Creates syntax objects used in error messages contain the selector, line number and character number
   var syntaxObject = function(lIndex, cIndex) {
     var selector = stripWhiteSpaceFromSelectors(currentSelector).join("\n") || currentStyleBlock().selector;
-  	return {selector: selector, line: lIndex || lineIndex + 1, char: cIndex || characterIndex + 1};
+    return {selector: selector, line: lIndex || lineIndex + 1, char: cIndex || characterIndex + 1};
   }
   
-  var throwStartBlockTagMissingError = function(lIndex, cIndex) {
-    var syntaxObj = syntaxObject(lIndex, cIndex);
-    var newError = new Error("Starting bracket expected for selector: '" + syntaxObj.selector + "' at line: " + syntaxObj.line + " char: " + syntaxObj.char);
-    newError.lineData = syntaxObj;
-    throw newError;
-  }
-  
-  var throwEndBlockTagMissingError = function(lIndex, cIndex) {
-    var syntaxObj = syntaxObject(lIndex, cIndex);
-    var newError = new Error("End bracket expected for selector: '" + syntaxObj.selector + "' at line: " + syntaxObj.line + " char: " + syntaxObj.char);
-    newError.lineData = syntaxObj;
-    throw newError;
-  }
-  
-  var throwSemicolonMissingError = function(lIndex, cIndex) {
-    var syntaxObj = syntaxObject(lIndex, cIndex);
-    var newError = new Error("Missing Semicolon for: '" + syntaxObj.selector + "' at line: " + syntaxObj.line + " char: " + syntaxObj.char);
-    newError.lineData = syntaxObj;
-    throw newError;
-  }
-  
-  var throwEndingCommentError = function(lIndex, cIndex) {
-    var syntaxObj = syntaxObject(lIndex, cIndex);
-    var newError = new Error("Comment ending not found for: `comment` at line: " + syntaxObj.line + " char: " + syntaxObj.char);
-    newError.lineData = syntaxObj;
-    throw newError;
-  }
-  
+  // Sets the current function being used to parse characters
   var setParserFunc = function(func) {
     previousParserFunc = parserFunc;
     parserFunc = func;
   }
   
+  // Sets the chracter index back to force the loop to rerun characters
   var goBackNumChars = function(num) {
     characterIndex -= num;
   }
   
+  // Sets the chracter index forward to force the loop to skip characters
   var goForwardNumChars = function(num) {
     characterIndex += num;
   }
   
-  var goBackNumLines = function(num) {
-    lineIndex -= num;
-  }
-  
+  // Looks returns the characters between the current characterIndex and characterIndex + num
+  // Used to look ahead to find out if a tag is found or not.
   var lookAheadNumChars = function(num) {
     var val = "";
     var charLength = lines[lineIndex].length;
@@ -153,11 +157,40 @@ var cssSyntaxValidator = function() {
     return val;
   }
   
+  // sets the parserFun to selectorFinder and resets the currentSelector array.
+  // This should be used whenever switching back to the selector finder
   var findSelector = function(character) {
     currentSelector = [];
     setParserFunc(selectorFinder);
   }
   
+  // Returns the current style block from the parsed cssData
+  var currentStyleBlock = function() {
+    return cssData[cssData.length - 1];
+  }
+  
+  // Adds a propert to the current style block
+  var addPropertyToCurrent = function() {
+    currentStyleBlock().properties.push({name: currentProperty, 
+                                         value: currentPropertyValue,
+                                         line: lineIndex + 1, 
+                                         // beginning of the property definition
+                                         char: characterIndex - currentPropertyValue.length - currentProperty.length - 1});
+    
+    // reset the other variables used in the declaration finder
+    currentPropertyValue = "";
+    currentProperty = "";
+    propertyFound = false;
+  }
+  
+  // creates a new style block
+  var newStyleBlock = function() {
+    cssData.push({selector: stripWhiteSpaceFromSelectors(currentSelector).join(" "), properties: [], line: lineIndex + 1, char: characterIndex - currentSelector[0].length + 1});
+  }
+  
+  // This function will return false of the given character is within a comment
+  // In order for this to work, it needs to be called each time, since it's looking
+  // for starting and ending comment characters
   var commentResolved = function(character) {
     if(character === blockCommentBeginChar){
       var nextTwoChars = lookAheadNumChars(1);
@@ -182,7 +215,15 @@ var cssSyntaxValidator = function() {
     }
     return !inBlockComment
   }
+  
+  // ************** Finders ************** //
+  // Finders are used to find different syntax
+  // patterns such has beginning/ending style blocks
+  // and css properties
 
+  // The property finder is triggered when within a style block, it checks syntax for
+  // things like semi-colons and ending style block brackets. This finder also builds
+  // property objects for the currentStyleBlock.
   var propertyFinder = function(character) {
     if(character === ":") {
       propertyFound = true;
@@ -191,19 +232,21 @@ var cssSyntaxValidator = function() {
       // the save the declaration.
       if(character === propertyEndChar) {
         addPropertyToCurrent()
+      
+      // If it's a new line and the current property name is blank, there is either a missing semi colon
+      // or a missing end block bracket
       } else if(propertyLine < lineIndex && currentProperty.length > 0) {
         // If the declaration is blank or the declaration value is a pseudo selector
-        // Assume the end block is missing.
+        // Assume the end block is missing, else there is a missing semicolon.
         if(currentPropertyValue.length === 0 || pseudoSelectors.indexOf(currentPropertyValue) > -1) {
           throwEndBlockTagMissingError(lineIndex - 2, 1);
+        } else {
+          throwSemicolonMissingError(lineIndex, lines[lineIndex - 1].length);
         }
-
-        throwSemicolonMissingError(lineIndex, lines[lineIndex - 1].length);
       } else if(character === blockStartChar) {
         throwEndBlockTagMissingError(lineIndex - 2, 1);
       // new line was found before an end of declaration character
       } else if(character === blockEndChar) {
-        // setParserFunc(selectorFinder);
         findSelector();
         // reset the other variables used in the declaration finder
         currentPropertyValue = "";
@@ -225,46 +268,27 @@ var cssSyntaxValidator = function() {
     propertyLine = lineIndex;
   }
   
-  var currentStyleBlock = function() {
-    return cssData[cssData.length - 1];
-  }
-  
-  var addPropertyToCurrent = function() {
-    currentStyleBlock().properties.push({name: currentProperty, 
-                                         value: currentPropertyValue,
-                                         line: lineIndex + 1, 
-                                         // beginning of the property definition
-                                         char: characterIndex - currentPropertyValue.length - currentProperty.length - 1});
-    
-    // reset the other variables used in the declaration finder
-    currentPropertyValue = "";
-    currentProperty = "";
-    propertyFound = false;
-  }
-  
-  var newStyleBlock = function() {
-    cssData.push({selector: stripWhiteSpaceFromSelectors(currentSelector).join(" "), properties: [], line: lineIndex + 1, char: characterIndex - currentSelector[0].length + 1});
-    currentSelector = [];
-  }
-   
+  // The selector finder is used to find selectors before property blocks.
+  // It also detects things like missing start block brackets.
   var selectorFinder = function(character) {
     var lastSelector = currentSelector[currentSelector.length - 1];
 
     switch(character){
+      // If the block start character is found, create a new style entry and switch to the propertyFinder
       case blockStartChar:
-        console.log("TODO: Validate selector here");
         newStyleBlock();
+        currentSelector = [];
         setParserFunc(propertyFinder);
         inProperty = true;
         break;
       case blockEndChar:
-        throwStartBlockTagMissingError(lineIndex, characterIndex);
+        throwStartBlockMissingError(lineIndex, characterIndex);
         break;
       default:
         // Throw an error if a new line is detected and the previous line doesn't have a `,`
         // and if the current line isn't leading with a `,`
         if(lastSelector && selectorLine < lineIndex && (!(/,\s*$/.test(lastSelector)) && !(/^\s*,/.test(currentLine))) ) {
-          throwStartBlockTagMissingError(lineIndex, characterIndex);
+          throwStartBlockMissingError(lineIndex, characterIndex);
         } else {
           // if there is a new line or the array is empty, populate it with an empty string
           if(selectorLine < lineIndex || lastSelector === undefined) { currentSelector.push(""); }
@@ -290,7 +314,8 @@ var cssSyntaxValidator = function() {
     inProperty = null;
     commentStartLine = null;
     commentStartCharacter = null;
-    
+    inBlockComment = null;
+
     findSelector();
   }
 
